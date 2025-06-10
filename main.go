@@ -27,6 +27,7 @@ func main() {
 		DbQueries: database.New(db),
 		Platform:  os.Getenv("PLATFORM"),
 		Secret:    os.Getenv("SECRET"),
+		PolkaKey:  os.Getenv("POLKA_KEY"),
 	}
 
 	port := "8080"
@@ -43,9 +44,16 @@ func main() {
 	serveMux.Handle("GET /api/chirps", cfg.MiddlewareAddConfig(handlers.GetAllChirps))
 	serveMux.Handle("GET /api/chirps/{id}", cfg.MiddlewareAddConfig(handlers.GetChirpById))
 	serveMux.Handle("POST /api/chirps", cfg.MiddlewareAuth(cfg.MiddlewareAddConfig(handlers.AddChirp)))
+	serveMux.Handle("DELETE /api/chirps/{id}", cfg.MiddlewareAuth(cfg.MiddlewareAddConfig(handlers.DeleteChirpByIdHandler)))
 
 	serveMux.Handle("POST /api/users", cfg.MiddlewareAddConfig(handlers.AddUserHandler))
+	serveMux.Handle("PUT /api/users", cfg.MiddlewareAuth(cfg.MiddlewareAddConfig(handlers.UpdateUserHandler)))
+
 	serveMux.Handle("POST /api/login", cfg.MiddlewareAddConfig(handlers.LoginHandler))
+	serveMux.Handle("POST /api/refresh", cfg.MiddlewareAddConfig(handlers.RefreshTokenHandler))
+	serveMux.Handle("POST /api/revoke", cfg.MiddlewareAddConfig(handlers.RevokeHandler))
+
+	serveMux.Handle("POST /api/polka/webhooks", cfg.MiddlewareAddConfig(handlers.PolkaWebHook))
 
 	srv := &http.Server{
 		Handler: serveMux,

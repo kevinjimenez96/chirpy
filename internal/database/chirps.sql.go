@@ -35,15 +35,80 @@ func (q *Queries) CreateChirp(ctx context.Context, arg CreateChirpParams) (Chirp
 	return i, err
 }
 
+const deleteChirpById = `-- name: DeleteChirpById :one
+DELETE
+FROM chirps
+WHERE id = $1 AND user_id = $2
+RETURNING id
+`
+
+type DeleteChirpByIdParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteChirpById(ctx context.Context, arg DeleteChirpByIdParams) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, deleteChirpById, arg.ID, arg.UserID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getAllChirps = `-- name: GetAllChirps :many
 
 SELECT id, created_at, updated_at, body, user_id
 FROM chirps
-ORDER BY created_at ASC
+ORDER BY
+    CASE WHEN $1::text = 'ASC' THEN created_at END ASC,
+    CASE WHEN $1::text = 'DESC' THEN created_at END DESC
 `
 
-func (q *Queries) GetAllChirps(ctx context.Context) ([]Chirp, error) {
-	rows, err := q.db.QueryContext(ctx, getAllChirps)
+func (q *Queries) GetAllChirps(ctx context.Context, sort string) ([]Chirp, error) {
+	rows, err := q.db.QueryContext(ctx, getAllChirps, sort)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Chirp
+	for rows.Next() {
+		var i Chirp
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Body,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllChirpsByAuthor = `-- name: GetAllChirpsByAuthor :many
+
+SELECT id, created_at, updated_at, body, user_id
+FROM chirps
+WHERE user_id = $1
+ORDER BY
+    CASE WHEN $2::text = 'ASC' THEN created_at END ASC,
+    CASE WHEN $2::text = 'DESC' THEN created_at END DESC
+`
+
+type GetAllChirpsByAuthorParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Sort   string    `json:"sort"`
+}
+
+func (q *Queries) GetAllChirpsByAuthor(ctx context.Context, arg GetAllChirpsByAuthorParams) ([]Chirp, error) {
+	rows, err := q.db.QueryContext(ctx, getAllChirpsByAuthor, arg.UserID, arg.Sort)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,27 @@ import (
 )
 
 func GetAllChirps(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) {
-	chirps, err := cfg.DbQueries.GetAllChirps(r.Context())
+	authorId := r.URL.Query().Get("author_id")
+	sortParam := r.URL.Query().Get("sort")
+
+	sort := "ASC"
+	if sortParam == "desc" {
+		sort = "DESC"
+	}
+
+	var chirps []database.Chirp
+	var err error
+
+	if authorId == "" {
+		chirps, err = cfg.DbQueries.GetAllChirps(r.Context(), sort)
+	} else {
+		authorIdUUID, _ := uuid.Parse(authorId)
+		chirps, err = cfg.DbQueries.GetAllChirpsByAuthor(r.Context(), database.GetAllChirpsByAuthorParams{
+			UserID: authorIdUUID,
+			Sort:   sort,
+		})
+	}
+
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error getting all chirps: %s", err), err)
 		return
@@ -36,6 +56,42 @@ func GetChirpById(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) 
 	}
 
 	respondWithJSON(w, http.StatusOK, chirp)
+}
+
+func DeleteChirpByIdHandler(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error: %s", err), err)
+		return
+	}
+
+	// this has been already checked
+	token, _ := auth.GetBearerToken(r.Header)
+	userId, _ := auth.ValidateJWT(token, cfg.Secret)
+
+	chirp, err := cfg.DbQueries.GetChirpById(r.Context(), id)
+
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, fmt.Sprintf("Error: %s", err), err)
+		return
+	}
+
+	if chirp.UserID != userId {
+		respondWithError(w, http.StatusForbidden, fmt.Sprintf("Error: %s", err), err)
+		return
+	}
+
+	chirpId, err := cfg.DbQueries.DeleteChirpById(r.Context(), database.DeleteChirpByIdParams{
+		ID:     id,
+		UserID: userId,
+	})
+
+	if chirpId == uuid.Nil || err != nil {
+		respondWithError(w, http.StatusForbidden, fmt.Sprintf("Error: %s", err), err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusNoContent, nil)
 }
 
 func AddChirp(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) {

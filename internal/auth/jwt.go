@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,29 +11,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type TokenType string
 
 const (
-	// TokenTypeAccess -
 	TokenTypeAccess TokenType = "chirpy-access"
 )
-
-// HashPassword -
-func HashPassword(password string) (string, error) {
-	dat, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(dat), nil
-}
-
-// CheckPasswordHash -
-func CheckPasswordHash(password, hash string) error {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-}
 
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
@@ -44,7 +30,6 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 	return token.SignedString([]byte(tokenSecret))
 }
 
-// ValidateJWT -
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	claimsStruct := jwt.RegisteredClaims{}
 	token, err := jwt.ParseWithClaims(
@@ -83,6 +68,25 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return "", fmt.Errorf("error: No auth token")
 	}
 	token, prefix := strings.CutPrefix(token, "Bearer ")
+	if !prefix {
+		return "", fmt.Errorf("error: Invalid token")
+	}
+
+	return token, nil
+}
+
+func MakeRefreshToken() (string, error) {
+	tokenBytes := make([]byte, 256)
+	rand.Read(tokenBytes)
+	return hex.EncodeToString(tokenBytes), nil
+}
+
+func GetAPIKey(headers http.Header) (string, error) {
+	token := headers.Get("Authorization")
+	if token == "" {
+		return "", fmt.Errorf("error: No auth token")
+	}
+	token, prefix := strings.CutPrefix(token, "ApiKey ")
 	if !prefix {
 		return "", fmt.Errorf("error: Invalid token")
 	}
