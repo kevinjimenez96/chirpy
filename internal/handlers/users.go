@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/kevinjimenez96/chirpy/internal/auth"
 	"github.com/kevinjimenez96/chirpy/internal/database"
@@ -24,17 +25,28 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) 
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error looking for user: %s", err), err)
 		return
 	}
-	err = auth.CheckPasswordHash(loggedUser.HashedPassword, loginUserReq.Password)
+	err = auth.CheckPasswordHash(loginUserReq.Password, loggedUser.HashedPassword)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, fmt.Sprintf("Error: Incorrect email or passwordt: %s", err), err)
 		return
 	}
 
+	expiresInSeconds := 60 * 60
+	if loginUserReq.ExpiresInSeconds > 0 {
+		expiresInSeconds = loginUserReq.ExpiresInSeconds
+	}
+
+	token, err := auth.MakeJWT(loggedUser.ID, cfg.Secret, time.Duration(expiresInSeconds)*time.Second)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, fmt.Sprintf("Error: token creation error: %s", err), err)
+		return
+	}
 	respondWithJSON(w, http.StatusOK, types.LoginUserRes{
 		ID:        loggedUser.ID,
 		CreatedAt: loggedUser.CreatedAt,
 		UpdatedAt: loggedUser.UpdatedAt,
 		Email:     loggedUser.Email,
+		Token:     token,
 	})
 }
 

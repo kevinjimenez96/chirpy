@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/kevinjimenez96/chirpy/internal/auth"
 	"github.com/kevinjimenez96/chirpy/internal/database"
 	"github.com/kevinjimenez96/chirpy/internal/types"
 )
@@ -38,11 +39,20 @@ func GetChirpById(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) 
 }
 
 func AddChirp(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) {
+	// this has been already checked
+	token, _ := auth.GetBearerToken(r.Header)
+	userId, _ := auth.ValidateJWT(token, cfg.Secret)
+
 	decoder := json.NewDecoder(r.Body)
 	addChirp := types.AddChirpReq{}
 	err := decoder.Decode(&addChirp)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error decoding chirp: %s", err), err)
+		return
+	}
+
+	if len(addChirp.Body) == 0 {
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Chirp too short: %d chars long", len(addChirp.Body)), nil)
 		return
 	}
 
@@ -52,7 +62,7 @@ func AddChirp(w http.ResponseWriter, r *http.Request, cfg *types.ApiConfig) {
 	}
 
 	chirp, err := cfg.DbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
-		UserID: addChirp.UserId,
+		UserID: userId,
 		Body:   censorChrip(addChirp.Body),
 	})
 

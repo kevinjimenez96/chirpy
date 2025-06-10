@@ -26,6 +26,7 @@ func main() {
 	var cfg = &types.ApiConfig{
 		DbQueries: database.New(db),
 		Platform:  os.Getenv("PLATFORM"),
+		Secret:    os.Getenv("SECRET"),
 	}
 
 	port := "8080"
@@ -41,7 +42,7 @@ func main() {
 
 	serveMux.Handle("GET /api/chirps", cfg.MiddlewareAddConfig(handlers.GetAllChirps))
 	serveMux.Handle("GET /api/chirps/{id}", cfg.MiddlewareAddConfig(handlers.GetChirpById))
-	serveMux.Handle("POST /api/chirps", cfg.MiddlewareAddConfig(handlers.AddChirp))
+	serveMux.Handle("POST /api/chirps", cfg.MiddlewareAuth(cfg.MiddlewareAddConfig(handlers.AddChirp)))
 
 	serveMux.Handle("POST /api/users", cfg.MiddlewareAddConfig(handlers.AddUserHandler))
 	serveMux.Handle("POST /api/login", cfg.MiddlewareAddConfig(handlers.LoginHandler))
